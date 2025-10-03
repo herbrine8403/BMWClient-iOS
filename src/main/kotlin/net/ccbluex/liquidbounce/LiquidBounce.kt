@@ -76,6 +76,7 @@ import net.ccbluex.liquidbounce.utils.client.InteractionTracker
 import net.ccbluex.liquidbounce.utils.client.PacketQueueManager
 import net.ccbluex.liquidbounce.utils.client.ServerObserver
 import net.ccbluex.liquidbounce.utils.client.error.ErrorHandler
+import net.ccbluex.liquidbounce.utils.client.isIOS
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.combat.CombatManager
 import net.ccbluex.liquidbounce.utils.entity.RenderedEntities
@@ -351,17 +352,22 @@ object LiquidBounce : EventListener {
 
             // Initialize deep learning engine as task, because we cannot know if DJL will request
             // resources from the internet.
-            launch("Deep Learning") { task ->
-                runCatching {
-                    DeepLearningEngine.init(task)
-                    ModelHolster.load()
-                }.onFailure { exception ->
-                    task.subTasks.clear()
+            // Disable deep learning on iOS to prevent crashes related to incompatible native libraries.
+            if (!isIOS()) {
+                launch("Deep Learning") { task ->
+                    runCatching {
+                        DeepLearningEngine.init(task)
+                        ModelHolster.load()
+                    }.onFailure { exception ->
+                        task.subTasks.clear()
 
-                    // LiquidBounce can still run without deep learning,
-                    // and we don't want to crash the client if it fails.
-                    logger.info("Failed to initialize deep learning.", exception)
+                        // LiquidBounce can still run without deep learning,
+                        // and we don't want to crash the client if it fails.
+                        logger.info("Failed to initialize deep learning.", exception)
+                    }
                 }
+            } else {
+                logger.info("[DeepLearning] Deep learning is disabled on iOS to prevent native library crashes.")
             }
         }
 

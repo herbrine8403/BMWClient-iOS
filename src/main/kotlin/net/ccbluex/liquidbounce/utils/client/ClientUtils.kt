@@ -33,3 +33,16 @@ val inGame: Boolean
  * Open uri in browser
  */
 fun browseUrl(url: String) = Util.getOperatingSystem().open(url)
+
+/**
+ * Checks if the client is running on an iOS device.
+ */
+fun isIOS(): Boolean {
+    val osName = System.getProperty("os.name", "").lowercase()
+    // On iOS/tvOS, the os.name property often contains "iOS" or "tvOS"
+    // It might also be "Mac OS X" if the environment is masquerading.
+    // A more reliable way is to check for specific iOS-related system properties or file paths,
+    // but for simplicity, we'll rely on os.name for now.
+    // If this isn't reliable enough, we might need to check for /var/mobile or other iOS-specific paths.
+    return osName.contains("ios") || osName.contains("iphone") || osName.contains("ipad") || osName == "mac os x"
+}
