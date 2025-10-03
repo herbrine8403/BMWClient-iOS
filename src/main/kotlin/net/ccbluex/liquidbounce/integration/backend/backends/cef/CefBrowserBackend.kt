@@ -209,7 +209,7 @@ class CefBrowserBackend : BrowserBackend, EventListener {
         settings: BrowserSettings,
         priority: Short,
         inputAcceptor: InputAcceptor?
-    ): BrowserBackend.Browser {
+    ): net.ccbluex.liquidbounce.integration.backend.browser.Browser {
         return try {
             CefBrowser(this, url, position, settings, priority, inputAcceptor)
                 .apply(::addBrowser)
@@ -217,27 +217,21 @@ class CefBrowserBackend : BrowserBackend, EventListener {
             // This is expected on platforms like iOS where JCEF is not supported
             logger.warn("JCEF library failed to create browser (likely unsupported platform): ${e.message}")
             // Return a dummy browser implementation
-            object : BrowserBackend.Browser {
+            object : net.ccbluex.liquidbounce.integration.backend.browser.Browser {
                 override var viewport: BrowserViewport = position
+                override var visible: Boolean = true
+                override var priority: Short = 0
                 override var url: String = url
-                override var zoomLevel: Double = 0.0
-                override var focused: Boolean = false
-                override var settings: BrowserSettings = settings
+                override val texture: BrowserTexture? = null
 
-                override fun resize(width: Int, height: Int) {}
-                override fun close() {}
-                override fun sendMouseClick(x: Int, y: Int, button: Int, action: Boolean) {}
-                override fun sendMouseMove(x: Int, y: Int) {}
-                override fun sendMouseWheel(delta: Double) {}
-                override fun sendKeyPress(keyCode: Int, scanCode: Int, modifiers: Int) {}
-                override fun sendKeyRelease(keyCode: Int, scanCode: Int, modifiers: Int) {}
-                override fun sendKeyTyped(character: Char, modifiers: Int) {}
-                override fun sendKeyTyped(string: String, modifiers: Int) {}
-                override fun executeJavaScript(script: String) {}
+                override fun forceReload() {}
                 override fun reload() {}
-                override fun goBack() {}
                 override fun goForward() {}
-                override fun loadUrl(url: String) {}
+                override fun goBack() {}
+                override fun update(width: Int, height: Int) {}
+                override fun invalidate() {}
+                override fun close() {}
+                override fun toString(): String = "DummyBrowser"
             }.apply { browsers.add(this) }
         }
     }
