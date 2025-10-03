@@ -53,21 +53,21 @@ class CefBrowser(
             val (scaledWidth, scaledHeight) = value.getScaledDimensions(quality)
             val zoomLevel = value.getZoomLevel(quality)
 
-            val viewRect = mcefBrowser.getViewRect(null)
+            val viewRect = mcefBrowser?.getViewRect(null)
             // Check if the browser dimensions have changed
-            if (viewRect.width == scaledWidth && viewRect.height == scaledHeight) {
+            if (viewRect != null && viewRect.width == scaledWidth && viewRect.height == scaledHeight) {
                 return
             }
 
             // TODO: CEF is suffering from a bug where resizing the browser,
             //   does not call [wasResized] and thus does not update the renderer.
             //   See: https://github.com/chromiumembedded/cef/issues/3826
-            mcefBrowser.resize(scaledWidth, scaledHeight)
-            mcefBrowser.zoomLevel = zoomLevel
+            mcefBrowser?.resize(scaledWidth, scaledHeight)
+            mcefBrowser?.zoomLevel = zoomLevel
 
             // To ensure the texture is updated, we clear the renderer. This call invalidates the
             // current UI.
-            mcefBrowser.clear()
+            mcefBrowser?.clear()
 
             logger.info("Browser $this viewport updated: $value," +
                 " scaled to $scaledWidth x $scaledHeight at zoom level $zoomLevel")
@@ -83,77 +83,84 @@ class CefBrowser(
     init {
         val quality = GlobalBrowserSettings.quality
         val (width, height) = viewport.getScaledDimensions(quality)
-        mcefBrowser = MCEF.INSTANCE.createBrowser(
-            url,
-            true,
-            width,
-            height,
-            MCEFBrowserSettings(
-                settings.currentFps,
-                GlobalBrowserSettings.accelerated?.get() == true
-            )
-        ).apply {
-            zoomLevel = viewport.getZoomLevel(quality)
+        mcefBrowser = try {
+            MCEF.INSTANCE.createBrowser(
+                url,
+                true,
+                width,
+                height,
+                MCEFBrowserSettings(
+                    settings.currentFps,
+                    GlobalBrowserSettings.accelerated?.get() == true
+                )
+            ).apply {
+                zoomLevel = viewport.getZoomLevel(quality)
 
-            addOnPaintListener {
-                comparePaintWithViewpoint(it.width, it.height)
+                addOnPaintListener {
+                    comparePaintWithViewpoint(it.width, it.height)
+                }
+                addOnAcceleratedPaintListener {
+                    comparePaintWithViewpoint(it.width, it.height)
+                }
             }
-            addOnAcceleratedPaintListener {
-                comparePaintWithViewpoint(it.width, it.height)
-            }
+        } catch (e: Exception) {
+            logger.error("Failed to create browser", e)
+            null
         }
     }
 
     private val textureId = Identifier.of("liquidbounce", "browser/tab/${mcefBrowser.hashCode()}")
 
     override var url: String
-        get() = mcefBrowser.url
+        get() = mcefBrowser?.url ?: "about:blank"
         set(value) {
-            mcefBrowser.loadURL(value)
+            mcefBrowser?.loadURL(value)
         }
 
     override val texture: BrowserTexture?
         get() {
-            if (mcefBrowser.renderer.isUnpainted) {
+            if (mcefBrowser?.renderer?.isUnpainted == true) {
                 return null
             }
 
-            return BrowserTexture(
-                mcefBrowser.renderer.textureID,
-                textureId,
-                viewport.height,
-                viewport.width,
-                mcefBrowser.renderer.isBGRA
-            )
+            return mcefBrowser?.renderer?.let { renderer ->
+                BrowserTexture(
+                    renderer.textureID,
+                    textureId,
+                    viewport.height,
+                    viewport.width,
+                    renderer.isBGRA
+                )
+            }
         }
 
     init {
         mc.textureManager.registerTexture(textureId, object : AbstractTexture() {
-            override fun getGlId() = mcefBrowser.renderer.textureID
+            override fun getGlId() = mcefBrowser?.renderer?.textureID ?: 0
         })
     }
 
     override fun forceReload() {
-        mcefBrowser.reloadIgnoreCache()
+        mcefBrowser?.reloadIgnoreCache()
     }
 
     override fun reload() {
-        mcefBrowser.reload()
+        mcefBrowser?.reload()
     }
 
     override fun goForward() {
-        mcefBrowser.goForward()
+        mcefBrowser?.goForward()
     }
 
     override fun goBack() {
-        mcefBrowser.goBack()
+        mcefBrowser?.goBack()
     }
 
     override fun close() {
         renderer.close()
         inputListener?.close()
         backend.removeBrowser(this)
-        mcefBrowser.close()
+        mcefBrowser?.close()
         mc.textureManager.destroyTexture(textureId)
     }
 
@@ -166,46 +173,46 @@ class CefBrowser(
     }
 
     override fun invalidate() {
-        mcefBrowser.clear()
+        mcefBrowser?.clear()
     }
 
     override fun toString() = "CefBrowser(url='$url', viewport=$viewport, visible=$visible, priority=$priority)"
 
     override fun mouseClicked(mouseX: Double, mouseY: Double, mouseButton: Int) {
-        mcefBrowser.setFocus(true)
+        mcefBrowser?.setFocus(true)
         val (scaledX, scaledY) = viewport.transformMouse(mouseX, mouseY, GlobalBrowserSettings.quality)
-        mcefBrowser.sendMousePress(scaledX, scaledY, mouseButton)
+        mcefBrowser?.sendMousePress(scaledX, scaledY, mouseButton)
     }
 
     override fun mouseReleased(mouseX: Double, mouseY: Double, mouseButton: Int) {
-        mcefBrowser.setFocus(true)
+        mcefBrowser?.setFocus(true)
         val (scaledX, scaledY) = viewport.transformMouse(mouseX, mouseY, GlobalBrowserSettings.quality)
-        mcefBrowser.sendMouseRelease(scaledX, scaledY, mouseButton)
+        mcefBrowser?.sendMouseRelease(scaledX, scaledY, mouseButton)
     }
 
     override fun mouseMoved(mouseX: Double, mouseY: Double) {
         val (scaledX, scaledY) = viewport.transformMouse(mouseX, mouseY, GlobalBrowserSettings.quality)
-        mcefBrowser.sendMouseMove(scaledX, scaledY)
+        mcefBrowser?.sendMouseMove(scaledX, scaledY)
     }
 
     override fun mouseScrolled(mouseX: Double, mouseY: Double, delta: Double) {
         val (scaledX, scaledY) = viewport.transformMouse(mouseX, mouseY, GlobalBrowserSettings.quality)
-        mcefBrowser.sendMouseWheel(scaledX, scaledY, delta)
+        mcefBrowser?.sendMouseWheel(scaledX, scaledY, delta)
     }
 
     override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int) {
-        mcefBrowser.setFocus(true)
-        mcefBrowser.sendKeyPress(keyCode, scanCode.toLong(), modifiers)
+        mcefBrowser?.setFocus(true)
+        mcefBrowser?.sendKeyPress(keyCode, scanCode.toLong(), modifiers)
     }
 
     override fun keyReleased(keyCode: Int, scanCode: Int, modifiers: Int) {
-        mcefBrowser.setFocus(true)
-        mcefBrowser.sendKeyRelease(keyCode, scanCode.toLong(), modifiers)
+        mcefBrowser?.setFocus(true)
+        mcefBrowser?.sendKeyRelease(keyCode, scanCode.toLong(), modifiers)
     }
 
     override fun charTyped(char: Char, modifiers: Int) {
-        mcefBrowser.setFocus(true)
-        mcefBrowser.sendKeyTyped(char, modifiers)
+        mcefBrowser?.setFocus(true)
+        mcefBrowser?.sendKeyTyped(char, modifiers)
     }
 
     private fun comparePaintWithViewpoint(width: Int, height: Int) {
