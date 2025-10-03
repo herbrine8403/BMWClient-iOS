@@ -73,7 +73,7 @@ class CefBrowser(
                 " scaled to $scaledWidth x $scaledHeight at zoom level $zoomLevel")
         }
     override var visible = true
-    private val mcefBrowser: MCEFBrowser
+    private val mcefBrowser: MCEFBrowser?
 
     private val renderer = BrowserRenderer(this)
     private val inputListener: InputListener? = inputAcceptor?.let { inputChecker ->
