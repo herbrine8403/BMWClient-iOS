@@ -23,6 +23,7 @@ import net.ccbluex.liquidbounce.api.core.HttpClient
 import net.ccbluex.liquidbounce.config.ConfigSystem
 import net.ccbluex.liquidbounce.event.EventListener
 import net.ccbluex.liquidbounce.integration.backend.BrowserBackend
+import net.ccbluex.liquidbounce.integration.backend.BrowserTexture
 import net.ccbluex.liquidbounce.integration.backend.browser.BrowserSettings
 import net.ccbluex.liquidbounce.integration.backend.browser.BrowserViewport
 import net.ccbluex.liquidbounce.integration.backend.input.InputAcceptor
@@ -64,7 +65,7 @@ class CefBrowserBackend : BrowserBackend, EventListener {
 
     override val isInitialized: Boolean
         get() = MCEF.INSTANCE.isInitialized
-    override var browsers = mutableListOf<CefBrowser>()
+    override var browsers = mutableListOf<net.ccbluex.liquidbounce.integration.backend.browser.Browser>()
     override var isAccelerationSupported: Boolean = false
 
     @Suppress("ThrowingExceptionsWithoutMessageOrCause")
@@ -236,11 +237,11 @@ class CefBrowserBackend : BrowserBackend, EventListener {
         }
     }
 
-    private fun addBrowser(browser: CefBrowser) {
-        browsers.sortedInsert(browser, CefBrowser::priority)
+    private fun addBrowser(browser: net.ccbluex.liquidbounce.integration.backend.browser.Browser) {
+        browsers.sortedInsert(browser, { (it as? CefBrowser)?.priority ?: 0 })
     }
 
-    internal fun removeBrowser(browser: CefBrowser) {
+    internal fun removeBrowser(browser: net.ccbluex.liquidbounce.integration.backend.browser.Browser) {
         browsers.remove(browser)
     }
 
