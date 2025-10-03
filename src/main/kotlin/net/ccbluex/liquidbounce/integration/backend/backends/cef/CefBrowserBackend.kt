@@ -82,32 +82,43 @@ class CefBrowserBackend : BrowserBackend, EventListener {
                 librariesDirectory = librariesFolder
             }
 
-            val resourceManager = MCEF.INSTANCE.newResourceManager()
+            try {
+                val resourceManager = MCEF.INSTANCE.newResourceManager()
 
-            // Check if system is compatible with MCEF (JCEF)
-            if (!resourceManager.isSystemCompatible) {
-                throw JcefIsntCompatible
-            }
-
-            HashValidator.validateFolder(resourceManager.commitDirectory)
-
-            if (resourceManager.requiresDownload()) {
-                taskManager.launch("MCEF") { task ->
-                    resourceManager.registerProgressListener(MCEFProgressForwarder(task))
-
-                    runCatching {
-                        resourceManager.downloadJcef()
-                        RenderSystem.recordRenderCall(whenAvailable)
-                    }.onFailure {
-                        ErrorHandler.fatal(
-                            error = it,
-                            quickFix = QuickFix.DOWNLOAD_JCEF_FAILED,
-                            additionalMessage = "Downloading jcef"
-                        )
-                    }
+                // Check if system is compatible with MCEF (JCEF)
+                if (!resourceManager.isSystemCompatible) {
+                    throw JcefIsntCompatible
                 }
-            } else {
+
+                HashValidator.validateFolder(resourceManager.commitDirectory)
+
+                if (resourceManager.requiresDownload()) {
+                    taskManager.launch("MCEF") { task ->
+                        resourceManager.registerProgressListener(MCEFProgressForwarder(task))
+
+                        runCatching {
+                            resourceManager.downloadJcef()
+                            RenderSystem.recordRenderCall(whenAvailable)
+                        }.onFailure {
+                            ErrorHandler.fatal(
+                                error = it,
+                                quickFix = QuickFix.DOWNLOAD_JCEF_FAILED,
+                                additionalMessage = "Downloading jcef"
+                            )
+                        }
+                    }
+                } else {
+                    whenAvailable()
+                }
+            } catch (e: UnsatisfiedLinkError) {
+                // This is expected on platforms like iOS where JCEF is not supported
+                logger.warn("JCEF library failed to load (likely unsupported platform): ${e.message}")
+                logger.warn("Browser functionality will be disabled.")
+                // We call whenAvailable to continue the initialization process
                 whenAvailable()
+            } catch (e: Exception) {
+                // Re-throw other exceptions
+                throw e
             }
         }
     }
@@ -148,30 +159,44 @@ class CefBrowserBackend : BrowserBackend, EventListener {
     }
 
     override fun start() {
-        if (!MCEF.INSTANCE.isInitialized) {
-            MCEF.INSTANCE.initialize()
-        }
-
-        // Check if acceleration is supported
-        val system = Util.getOperatingSystem()
-        isAccelerationSupported = when (system) {
-            Util.OperatingSystem.WINDOWS -> {
-                // Check if required OpenGL extensions for D3D11 shared texture interop are supported
-                checkAccelerationSupport()
+        try {
+            if (!MCEF.INSTANCE.isInitialized) {
+                MCEF.INSTANCE.initialize()
             }
-            else -> false
+
+            // Check if acceleration is supported
+            val system = Util.getOperatingSystem()
+            isAccelerationSupported = when (system) {
+                Util.OperatingSystem.WINDOWS -> {
+                    // Check if required OpenGL extensions for D3D11 shared texture interop are supported
+                    checkAccelerationSupport()
+                }
+                else -> false
+            }
+        } catch (e: UnsatisfiedLinkError) {
+            // This is expected on platforms like iOS where JCEF is not supported
+            logger.warn("JCEF library failed to initialize (likely unsupported platform): ${e.message}")
+            logger.warn("Browser functionality will be disabled.")
         }
     }
 
     override fun stop() {
-        MCEF.INSTANCE.shutdown()
-        MCEF.INSTANCE.settings.cacheDirectory?.deleteRecursively()
+        try {
+            MCEF.INSTANCE.shutdown()
+            MCEF.INSTANCE.settings.cacheDirectory?.deleteRecursively()
+        } catch (e: UnsatisfiedLinkError) {
+            // This is expected on platforms like iOS where JCEF is not supported
+            logger.warn("JCEF library failed to shutdown (likely unsupported platform): ${e.message}")
+        }
     }
 
     override fun update() {
         if (MCEF.INSTANCE.isInitialized) {
             try {
                 MCEF.INSTANCE.app.handle.N_DoMessageLoopWork()
+            } catch (e: UnsatisfiedLinkError) {
+                // This is expected on platforms like iOS where JCEF is not supported
+                logger.warn("JCEF library failed to update (likely unsupported platform): ${e.message}")
             } catch (e: Exception) {
                 logger.error("Failed to draw browser globally", e)
             }
@@ -184,8 +209,38 @@ class CefBrowserBackend : BrowserBackend, EventListener {
         settings: BrowserSettings,
         priority: Short,
         inputAcceptor: InputAcceptor?
-    ) = CefBrowser(this, url, position, settings, priority, inputAcceptor)
-        .apply(::addBrowser)
+    ): BrowserBackend.Browser {
+        return try {
+            CefBrowser(this, url, position, settings, priority, inputAcceptor)
+                .apply(::addBrowser)
+        } catch (e: UnsatisfiedLinkError) {
+            // This is expected on platforms like iOS where JCEF is not supported
+            logger.warn("JCEF library failed to create browser (likely unsupported platform): ${e.message}")
+            // Return a dummy browser implementation
+            object : BrowserBackend.Browser {
+                override var viewport: BrowserViewport = position
+                override var url: String = url
+                override var zoomLevel: Double = 0.0
+                override var focused: Boolean = false
+                override var settings: BrowserSettings = settings
+
+                override fun resize(width: Int, height: Int) {}
+                override fun close() {}
+                override fun sendMouseClick(x: Int, y: Int, button: Int, action: Boolean) {}
+                override fun sendMouseMove(x: Int, y: Int) {}
+                override fun sendMouseWheel(delta: Double) {}
+                override fun sendKeyPress(keyCode: Int, scanCode: Int, modifiers: Int) {}
+                override fun sendKeyRelease(keyCode: Int, scanCode: Int, modifiers: Int) {}
+                override fun sendKeyTyped(character: Char, modifiers: Int) {}
+                override fun sendKeyTyped(string: String, modifiers: Int) {}
+                override fun executeJavaScript(script: String) {}
+                override fun reload() {}
+                override fun goBack() {}
+                override fun goForward() {}
+                override fun loadUrl(url: String) {}
+            }.apply { browsers.add(this) }
+        }
+    }
 
     private fun addBrowser(browser: CefBrowser) {
         browsers.sortedInsert(browser, CefBrowser::priority)

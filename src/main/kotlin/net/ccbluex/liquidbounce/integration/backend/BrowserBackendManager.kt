@@ -26,21 +26,14 @@ import net.ccbluex.liquidbounce.event.events.GameRenderEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.integration.backend.browser.GlobalBrowserSettings
 import net.ccbluex.liquidbounce.integration.backend.backends.cef.CefBrowserBackend
-import net.ccbluex.liquidbounce.integration.backend.backends.empty.EmptyBrowserBackend
 import net.ccbluex.liquidbounce.integration.interop.persistant.PersistentLocalStorage
 import net.ccbluex.liquidbounce.integration.task.TaskManager
-import net.ccbluex.liquidbounce.utils.client.isIOS
 import net.ccbluex.liquidbounce.utils.client.logger
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.FIRST_PRIORITY
 
 object BrowserBackendManager : EventListener {
 
-    val browserBackend: BrowserBackend = if (isIOS()) {
-        logger.info("[Browser] iOS detected, using empty browser backend to prevent JCEF crashes.")
-        EmptyBrowserBackend()
-    } else {
-        CefBrowserBackend()
-    }
+    val browserBackend: BrowserBackend = CefBrowserBackend()
 
     init {
         PersistentLocalStorage
